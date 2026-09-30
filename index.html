@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Svarupa — Meet your true form | Working Prototype</title>
+<meta name="description" content="Svarupa is an AI practice companion for movement learning. GPS for the body: your teacher sets the destination; Svarupa guides your solo practice back to it. Working prototype — pose comparison runs entirely on your device.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          display: ['Fraunces', 'Georgia', 'serif'],
+          sans: ['Inter', 'system-ui', 'sans-serif']
+        },
+        colors: {
+          ink: '#0B0A08',
+          gold: '#E3B34C',
+          tealglow: '#35D0BA'
+        }
+      }
+    }
+  };
+</script>
+<style>
+  html { background:#0B0A08; }
+  body { background:#0B0A08; }
+  ::selection { background:rgba(227,179,76,.35); }
+  .grain::after {
+    content:""; position:fixed; inset:0; z-index:60; pointer-events:none; opacity:.055;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  }
+  .stage-glow { background: radial-gradient(120% 90% at 50% 0%, rgba(227,179,76,.10) 0%, rgba(227,179,76,0) 55%), radial-gradient(90% 70% at 85% 100%, rgba(53,208,186,.07) 0%, rgba(53,208,186,0) 60%); }
+  .card { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-radius:1rem; }
+  .card-title { font-size:.68rem; letter-spacing:.18em; text-transform:uppercase; color:rgba(255,255,255,.45); font-weight:600; }
+  .btn { display:inline-flex; align-items:center; gap:.45rem; font-size:.83rem; font-weight:600; border-radius:.65rem; padding:.55rem .95rem; border:1px solid rgba(255,255,255,.12); color:#EDEAE4; background:rgba(255,255,255,.05); transition:all .18s ease; cursor:pointer; }
+  .btn:hover { background:rgba(255,255,255,.10); border-color:rgba(255,255,255,.22); }
+  .btn:disabled { opacity:.38; cursor:not-allowed; }
+  .btn-gold { background:#E3B34C; border-color:#E3B34C; color:#191304; }
+  .btn-gold:hover { background:#EFC56A; border-color:#EFC56A; }
+  .btn-teal { background:rgba(53,208,186,.14); border-color:rgba(53,208,186,.45); color:#9BE8DC; }
+  .btn-teal:hover { background:rgba(53,208,186,.22); }
+  .pose-item { width:100%; text-align:left; border:1px solid rgba(255,255,255,.08); background:rgba(255,255,255,.02); border-radius:.8rem; padding:.65rem .8rem; transition:all .18s ease; cursor:pointer; }
+  .pose-item:hover { border-color:rgba(227,179,76,.45); }
+  .pose-item.selected { border-color:#E3B34C; background:rgba(227,179,76,.08); box-shadow:0 0 0 1px #E3B34C inset; }
+  .pose-item .done-badge { color:#35D0BA; }
+  .chip { border:1px solid rgba(255,255,255,.08); background:rgba(255,255,255,.03); border-radius:.6rem; padding:.35rem .5rem; }
+  .chip .k { font-size:.6rem; letter-spacing:.12em; text-transform:uppercase; color:rgba(255,255,255,.4); display:block; }
+  .chip .v { font-size:.85rem; font-weight:600; color:#EDEAE4; font-variant-numeric:tabular-nums; }
+  .switch { position:relative; width:44px; height:24px; appearance:none; background:rgba(255,255,255,.12); border-radius:999px; outline:none; cursor:pointer; transition:background .2s; flex:none; }
+  .switch:checked { background:#E3B34C; }
+  .switch::before { content:""; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#0B0A08; transition:transform .2s; }
+  .switch:checked::before { transform:translateX(20px); background:#191304; }
+  #ringFg { transition: stroke-dashoffset .18s ease, stroke .3s ease; }
+  #holdFlash { opacity:0; pointer-events:none; transition:opacity .3s ease; }
+  #holdFlash.show { opacity:1; }
+  .fade-in { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
+  .fade-in-2 { animation: fadeUp .7s .12s cubic-bezier(.22,1,.36,1) both; }
+  .fade-in-3 { animation: fadeUp .7s .24s cubic-bezier(.22,1,.36,1) both; }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
+  .pulse-next { animation: pulseNext 1.6s ease-in-out infinite; }
+  @keyframes pulseNext { 0%,100% { box-shadow:0 0 0 0 rgba(53,208,186,.45);} 50% { box-shadow:0 0 0 7px rgba(53,208,186,0);} }
+  input[type="text"] { outline:none; }
+  input[type="text"]:focus { border-color:#E3B34C !important; box-shadow:0 0 0 1px #E3B34C; }
+  .scroll-thin::-webkit-scrollbar { width:5px; } .scroll-thin::-webkit-scrollbar-thumb { background:rgba(255,255,255,.15); border-radius:99px; }
+</style>
+</head>
+<body class="grain text-[#EDEAE4] font-sans antialiased min-h-screen">
+
+  <!-- ambient stage light -->
+  <div class="fixed inset-0 pointer-events-none" style="background:radial-gradient(60% 40% at 50% -5%, rgba(227,179,76,.09), transparent 70%);"></div>
+
+  <div class="relative max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-10 pb-16">
+
+    <!-- ===== Header ===== -->
+    <header class="fade-in flex flex-wrap items-end justify-between gap-4 pt-8 pb-5 border-b border-white/[0.07]">
+      <div>
+        <div class="flex items-baseline gap-3 flex-wrap">
+          <h1 class="font-display text-4xl sm:text-5xl font-semibold tracking-tight text-white">Svarupa</h1>
+          <span class="text-sm text-white/50 italic font-display">sva-ROO-pa · “one’s own true form”</span>
+        </div>
+        <p class="mt-2 text-[15px] text-white/70 max-w-xl leading-relaxed">
+          <span class="text-gold font-semibold">Meet your true form.</span>
+          GPS for the body — your teacher sets the destination; Svarupa guides your solo practice back to it.
+        </p>
+      </div>
+      <div class="flex flex-col items-start sm:items-end gap-2">
+        <span class="inline-flex items-center gap-2 text-[11px] font-semibold tracking-wide uppercase border border-tealglow/40 text-tealglow bg-tealglow/10 rounded-full px-3 py-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-tealglow animate-pulse"></span>
+          Working prototype · MIT Solve 2027 Global Learning Challenge
+        </span>
+        <span class="text-[11px] text-white/40">Pose analysis runs on-device — video never leaves this browser.</span>
+      </div>
+    </header>
+
+    <!-- status banner -->
+    <div id="statusBanner" class="hidden mt-4 rounded-xl border px-4 py-3 text-sm leading-relaxed"></div>
+
+    <!-- ===== Main layout ===== -->
+    <main class="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-6 items-start">
+
+      <!-- ===== Stage (left, 2/3) ===== -->
+      <section class="lg:col-span-2 fade-in-2">
+        <div class="card overflow-hidden">
+          <div class="relative stage-glow bg-black/60" style="aspect-ratio:16/9;">
+            <video id="inputVideo" class="hidden" playsinline muted></video>
+            <canvas id="liveCanvas" width="1280" height="720" class="absolute inset-0 w-full h-full"></canvas>
+
+            <!-- photo stage -->
+            <div id="photoWrap" class="absolute inset-0 hidden items-center justify-center bg-black/70">
+              <canvas id="photoCanvas" width="1280" height="720" class="max-w-full max-h-full"></canvas>
+            </div>
+
+            <!-- mode chip -->
+            <div class="absolute top-3 left-3 flex items-center gap-2">
+              <span id="modeChip" class="text-[10px] font-bold tracking-[.15em] uppercase bg-black/60 backdrop-blur border border-white/15 rounded-full px-2.5 py-1 text-white/80">Camera off</span>
+              <span id="detectChip" class="hidden text-[10px] font-bold tracking-[.15em] uppercase bg-black/60 backdrop-blur border border-white/15 rounded-full px-2.5 py-1 text-white/60">No body in frame</span>
+            </div>
+
+            <!-- hold success flash -->
+            <div id="holdFlash" class="absolute inset-0 flex items-center justify-center bg-black/35 backdrop-blur-[1px]">
+              <div class="text-center">
+                <div class="font-display text-4xl sm:text-5xl font-semibold text-tealglow drop-shadow">Held it ✓</div>
+                <div class="text-white/85 mt-1 text-sm">Pose complete — beautifully done.</div>
+              </div>
+            </div>
+
+            <!-- idle hint -->
+            <div id="stageHint" class="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div class="text-center px-6">
+                <div class="font-display text-2xl sm:text-3xl text-white/85 font-medium">Your practice studio is ready</div>
+                <p class="text-white/50 text-sm mt-2 max-w-md mx-auto leading-relaxed">Start your camera and step back so your whole body is in frame — or upload a photo if you’d rather begin that way.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- stage controls -->
+          <div class="flex flex-wrap items-center gap-2.5 px-4 py-3.5 border-t border-white/[0.07]">
+            <button id="btnStartCam" class="btn btn-gold">● Start camera</button>
+            <button id="btnStopCam" class="btn hidden">Stop camera</button>
+            <label for="photoInput" class="btn cursor-pointer">Upload a photo instead</label>
+            <input type="file" id="photoInput" accept="image/*" class="hidden">
+            <button id="btnBackCam" class="btn hidden">Back to camera</button>
+            <div class="flex-1"></div>
+            <button id="btnNextPose" class="btn btn-teal hidden">Next pose →</button>
+          </div>
+        </div>
+
+        <!-- live joint angles -->
+        <div class="card mt-5 px-4 py-3.5">
+          <div class="flex items-center justify-between">
+            <span class="card-title">Live joint angles</span>
+            <span class="text-[11px] text-white/35">degrees · from 33 pose landmarks, on-device</span>
+          </div>
+          <div id="angleGrid" class="grid grid-cols-4 sm:grid-cols-8 gap-2 mt-3"></div>
+        </div>
+
+        <p class="text-[12px] leading-relaxed text-white/40 mt-4 max-w-2xl">
+          Honest note: the three built-in poses are a <span class="text-white/60">starter reference set</span> with illustrative target angles.
+          In the real product, references come from teachers — try <span class="text-white/60">Teacher Record mode</span> on the right: hold any pose, capture it, and it becomes a reference students can practice against.
+        </p>
+      </section>
+
+      <!-- ===== Control / feedback panel (right, 1/3) ===== -->
+      <aside class="fade-in-3 flex flex-col gap-5">
+
+        <!-- score + correction -->
+        <div class="card px-5 py-5">
+          <div class="flex items-center gap-5">
+            <div class="relative flex-none" style="width:132px;height:132px;">
+              <svg viewBox="0 0 140 140" class="w-full h-full">
+                <circle cx="70" cy="70" r="54" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="10"></circle>
+                <circle id="ringFg" cx="70" cy="70" r="54" fill="none" stroke="#585048" stroke-width="10" stroke-linecap="round"
+                        stroke-dasharray="339.3" stroke-dashoffset="339.3" transform="rotate(-90 70 70)"></circle>
+              </svg>
+              <div class="absolute inset-0 flex flex-col items-center justify-center">
+                <div class="font-display text-[34px] leading-none font-semibold text-white"><span id="scoreText">–</span><span class="text-base text-white/50">%</span></div>
+                <div class="text-[9px] tracking-[.2em] uppercase text-white/40 mt-1">match</div>
+              </div>
+            </div>
+            <div class="min-w-0">
+              <div class="card-title">Right now</div>
+              <p id="correctionText" class="font-display text-[19px] leading-snug text-white mt-1.5">Pick a pose, start the camera, and I’ll guide you — one correction at a time.</p>
+              <div class="mt-3">
+                <div class="flex justify-between text-[10px] uppercase tracking-[.15em] text-white/40"><span>Hold at 85%+</span><span id="holdLabel">0.0s / 2s</span></div>
+                <div class="h-1.5 rounded-full bg-white/[0.08] mt-1 overflow-hidden"><div id="holdBarFill" class="h-full rounded-full bg-tealglow" style="width:0%"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- pose picker -->
+        <div class="card px-5 py-5">
+          <div class="flex items-center justify-between">
+            <span class="card-title">Practice against</span>
+            <span class="text-[11px] text-white/35">reference poses</span>
+          </div>
+          <div id="poseList" class="flex flex-col gap-2 mt-3 max-h-[290px] overflow-y-auto scroll-thin pr-1"></div>
+          <div class="mt-3">
+            <div class="card-title" style="letter-spacing:.12em;">Target angles for selected pose</div>
+            <div id="targetGrid" class="grid grid-cols-4 gap-1.5 mt-2"></div>
+          </div>
+        </div>
+
+        <!-- teacher record -->
+        <div class="card px-5 py-5">
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <span class="card-title">Teacher Record mode</span>
+              <p class="text-[12px] text-white/50 mt-1 leading-relaxed">Teachers record the destination. Students practice toward it.</p>
+            </div>
+            <input type="checkbox" id="teacherToggle" class="switch" aria-label="Toggle teacher record mode">
+          </div>
+          <div id="teacherPanel" class="hidden mt-4">
+            <label class="card-title" for="poseNameInput" style="letter-spacing:.12em;">Name this reference</label>
+            <input type="text" id="poseNameInput" class="mt-1.5 w-full bg-white/[0.04] border border-white/12 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30" placeholder="e.g. Guru’s araimandi check">
+            <button id="btnCapture" class="btn btn-gold w-full justify-center mt-3" disabled>Capture reference from my pose</button>
+            <p id="captureNote" class="text-[11px] text-white/40 mt-2 leading-relaxed">Start the camera, hold your pose steady, then capture. The 8 joint angles are saved in this browser (localStorage) and added to the practice list.</p>
+          </div>
+        </div>
+
+        <!-- session -->
+        <div class="card px-5 py-5">
+          <div class="flex items-center justify-between">
+            <span class="card-title">This session</span>
+            <button id="btnResetSession" class="text-[11px] text-white/40 hover:text-white/80 underline underline-offset-2">Reset</button>
+          </div>
+          <div class="grid grid-cols-4 gap-2 mt-3 text-center">
+            <div class="chip"><span class="k">Time</span><span class="v" id="sessTime">0:00</span></div>
+            <div class="chip"><span class="k">Attempts</span><span class="v" id="sessAttempts">0</span></div>
+            <div class="chip"><span class="k">Best</span><span class="v" id="sessBest">–</span></div>
+            <div class="chip"><span class="k">Poses held</span><span class="v" id="sessDone">0</span></div>
+          </div>
+          <p id="sessSummary" class="text-[12px] text-white/45 mt-3 leading-relaxed">No practice yet. Your summary will appear here as you work through the poses.</p>
+        </div>
+
+      </aside>
+    </main>
+
+    <!-- ===== Footer ===== -->
+    <footer class="mt-12 pt-6 border-t border-white/[0.07] flex flex-col sm:flex-row justify-between gap-3 text-[12px] text-white/35 leading-relaxed">
+      <p><span class="font-display text-white/60 text-sm">Svarupa</span> · sva-ROO-pa · Meet your true form.<br>
+      A working prototype built for the MIT Solve 2027 Global Learning Challenge. Movement feedback for practice only — not medical advice.</p>
+      <p class="sm:text-right">Pose estimation: MediaPipe Pose, running locally in your browser.<br>No video, photo, or angle data is uploaded or stored on any server.</p>
+    </footer>
+  </div>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/motion@11/dist/motion.js"></script>
+<script>
+(function () {
+'use strict';
+/* ================= helpers & constants ================= */
+var $ = function (id) { return document.getElementById(id); };
+function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+var ANGLE_KEYS = ['lKnee', 'rKnee', 'lElbow', 'rElbow', 'lShoulder', 'rShoulder', 'lHip', 'rHip'];
+var ANGLE_LABELS = { lKnee: 'L knee', rKnee: 'R knee', lElbow: 'L elbow', rElbow: 'R elbow', lShoulder: 'L shoulder', rShoulder: 'R shoulder', lHip: 'L hip', rHip: 'R hip' };
+
+/* ================= starter reference set (illustrative targets) ================= */
+var BUILTIN_POSES = [
+  { id: 'standing', builtin: true, name: 'Standing Tall', sub: 'Alignment check · arms resting at your sides',
+    angles: { lKnee: 176, rKnee: 176, lElbow: 172, rElbow: 172, lShoulder: 12, rShoulder: 12, lHip: 176, rHip: 176 } },
+  { id: 'halfsit', builtin: true, name: 'Half-Sit Stance', sub: 'Ardha-mandala inspired · the Kuchipudi base position',
+    angles: { lKnee: 120, rKnee: 120, lElbow: 172, rElbow: 172, lShoulder: 80, rShoulder: 80, lHip: 130, rHip: 130 } },
+  { id: 'raisedarm', builtin: true, name: 'Raised-Arm Pose', sub: 'Left arm to the sky · right arm extended · soft knees',
+    angles: { lKnee: 150, rKnee: 150, lElbow: 170, rElbow: 168, lShoulder: 160, rShoulder: 80, lHip: 166, rHip: 166 } }
+];
+
+/* ================= state ================= */
+var customPoses = loadCustomPoses();
+var selectedPoseId = 'standing';
+var stats = {};               // poseId -> { attempts, best, done }
+var sourceMode = 'idle';      // idle | live | photo
+var cameraOn = false, cameraObj = null, rafId = null;
+var poseEngine = null, engineReady = false;
+var smoothBuf = [], SMOOTH_N = 5;
+var lastAngles = null;
+var holdStart = null, celebrated = false, prevScore = 0, frameN = 0;
+var sessionStart = null;
+var photoCountedFor = '__none__';
+var lastCorrection = '';
+
+function allPoses() { return BUILTIN_POSES.concat(customPoses); }
+function getPose(id) { for (var i = 0; i < allPoses().length; i++) { if (allPoses()[i].id === id) return allPoses()[i]; } return BUILTIN_POSES[0]; }
+function statFor(id) { if (!stats[id]) stats[id] = { attempts: 0, best: 0, done: false }; return stats[id]; }
+function loadCustomPoses() {
+  try {
+    var raw = localStorage.getItem('svarupa_custom_poses');
+    if (!raw) return [];
+    var arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr.filter(function (p) { return p && p.id && p.name && p.angles; });
+  } catch (e) { return []; }
+}
+function saveCustomPoses() { try { localStorage.setItem('svarupa_custom_poses', JSON.stringify(customPoses)); } catch (e) {} }
+
+/* ================= status / feedback UI ================= */
+function setStatus(msg, kind) {
+  var b = $('statusBanner');
+  if (!msg) { b.classList.add('hidden'); b.textContent = ''; return; }
+  b.textContent = msg;
+  b.classList.remove('hidden');
+  if (kind === 'error') { b.style.borderColor = 'rgba(248,113,113,.5)'; b.style.background = 'rgba(248,113,113,.08)'; b.style.color = '#FCA5A5'; }
+  else { b.style.borderColor = 'rgba(227,179,76,.4)'; b.style.background = 'rgba(227,179,76,.07)'; b.style.color = '#E7CE9A'; }
+}
+function setCorrection(t) { if (t !== lastCorrection) { lastCorrection = t; $('correctionText').textContent = t; } }
+var RING_C = 339.3;
+function setScore(score) {
+  var ring = $('ringFg');
+  if (score === null || score === undefined) { $('scoreText').textContent = '–'; ring.style.strokeDashoffset = String(RING_C); ring.style.stroke = '#585048'; return; }
+  $('scoreText').textContent = String(score);
+  ring.style.strokeDashoffset = String(RING_C * (1 - score / 100));
+  ring.style.stroke = score >= 85 ? '#35D0BA' : (score >= 55 ? '#E3B34C' : '#D97757');
+}
+function setHold(frac, label) { $('holdBarFill').style.width = (frac * 100).toFixed(0) + '%'; $('holdLabel').textContent = label; }
+function updateReadout(cur) { ANGLE_KEYS.forEach(function (k) { var el = $('ang_' + k); if (el) el.textContent = Math.round(cur[k]) + '°'; }); }
+
+/* ================= pose list / targets ================= */
+function buildAngleGrid() {
+  var g = $('angleGrid'); g.innerHTML = '';
+  ANGLE_KEYS.forEach(function (k) {
+    var d = document.createElement('div');
+    d.className = 'chip text-center';
+    d.innerHTML = '<span class="k">' + ANGLE_LABELS[k] + '</span><span class="v" id="ang_' + k + '">–</span>';
+    g.appendChild(d);
+  });
+}
+function buildPoseList() {
+  var list = $('poseList'); list.innerHTML = '';
+  allPoses().forEach(function (p) {
+    var st = statFor(p.id);
+    var btn = document.createElement('button');
+    btn.className = 'pose-item' + (p.id === selectedPoseId ? ' selected' : '');
+    var right = st.done ? '<span class="done-badge text-[12px] font-bold">HELD ✓</span>'
+                        : (st.best > 0 ? '<span class="text-[11px] text-white/40">best ' + st.best + '%</span>' : '');
+    btn.innerHTML =
+      '<span class="flex items-center justify-between gap-2">' +
+        '<span class="font-semibold text-[14px] text-white">' + escapeHtml(p.name) + '</span>' + right +
+      '</span>' +
+      '<span class="block text-[12px] text-white/45 mt-0.5 leading-snug">' + escapeHtml(p.sub || 'Teacher-recorded reference') + '</span>' +
+      (p.builtin ? '' : '<span class="block text-[10px] uppercase tracking-[.15em] mt-1" style="color:rgba(227,179,76,.85)">Teacher reference</span>');
+    btn.addEventListener('click', function () { selectPose(p.id); });
+    list.appendChild(btn);
+    if (!p.builtin) {
+      var del = document.createElement('button');
+      del.className = 'text-[11px] text-white/35 hover:text-red-300 underline underline-offset-2 self-end -mt-1 mr-1';
+      del.textContent = 'remove this reference';
+      del.addEventListener('click', function () {
+        customPoses = customPoses.filter(function (c) { return c.id !== p.id; });
+        saveCustomPoses();
+        if (selectedPoseId === p.id) selectedPoseId = 'standing';
+        buildPoseList(); renderTargets();
+      });
+      list.appendChild(del);
+    }
+  });
+}
+function renderTargets() {
+  var p = getPose(selectedPoseId), g = $('targetGrid'); g.innerHTML = '';
+  ANGLE_KEYS.forEach(function (k) {
+    var d = document.createElement('div');
+    d.className = 'chip text-center';
+    d.innerHTML = '<span class="k">' + ANGLE_LABELS[k] + '</span><span class="v" style="font-size:.78rem">' + Math.round(p.angles[k]) + '°</span>';
+    g.appendChild(d);
+  });
+}
+function selectPose(id) {
+  selectedPoseId = id; holdStart = null; celebrated = false; prevScore = 0;
+  buildPoseList(); renderTargets(); renderSession();
+  setCorrection('Reference loaded: “' + getPose(id).name + '”. Match the shape — I’ll call out one correction at a time.');
+}
+/* ================= pose math ================= */
+function angleAt(a, b, c) {
+  var v1x = a.x - b.x, v1y = a.y - b.y, v2x = c.x - b.x, v2y = c.y - b.y;
+  var m1 = Math.hypot(v1x, v1y), m2 = Math.hypot(v2x, v2y);
+  if (!m1 || !m2) return 0;
+  var cos = clamp((v1x * v2x + v1y * v2y) / (m1 * m2), -1, 1);
+  return Math.acos(cos) * 180 / Math.PI;
+}
+function computeAngles(lm) {
+  return {
+    lKnee: angleAt(lm[23], lm[25], lm[27]),
+    rKnee: angleAt(lm[24], lm[26], lm[28]),
+    lElbow: angleAt(lm[11], lm[13], lm[15]),
+    rElbow: angleAt(lm[12], lm[14], lm[16]),
+    lShoulder: angleAt(lm[23], lm[11], lm[13]),
+    rShoulder: angleAt(lm[24], lm[12], lm[14]),
+    lHip: angleAt(lm[11], lm[23], lm[25]),
+    rHip: angleAt(lm[12], lm[24], lm[26])
+  };
+}
+function smoothPush(a) {
+  smoothBuf.push(a);
+  if (smoothBuf.length > SMOOTH_N) smoothBuf.shift();
+  var out = {};
+  ANGLE_KEYS.forEach(function (k) {
+    var s = 0; smoothBuf.forEach(function (f) { s += f[k]; });
+    out[k] = s / smoothBuf.length;
+  });
+  return out;
+}
+function scoreAgainst(cur, target) {
+  var sum = 0, devs = {};
+  ANGLE_KEYS.forEach(function (k) {
+    var d = Math.abs(cur[k] - target[k]);
+    devs[k] = d;
+    sum += clamp(1 - Math.max(0, d - 8) / 55, 0, 1);
+  });
+  return { score: Math.round(sum / ANGLE_KEYS.length * 100), devs: devs };
+}
+function correctionFor(cur, target, devs, score) {
+  if (score >= 93) return 'Beautiful — this matches the reference. Hold it right there.';
+  var lk = cur.lKnee - target.lKnee, rk = cur.rKnee - target.rKnee;
+  if (devs.lKnee > 14 && devs.rKnee > 14 && Math.sign(lk) === Math.sign(rk)) {
+    return lk > 0 ? 'Sink lower through both knees' : 'Rise up a little — soften the bend in both knees';
+  }
+  var key = ANGLE_KEYS[0];
+  ANGLE_KEYS.forEach(function (k) { if (devs[k] > devs[key]) key = k; });
+  if (devs[key] <= 10) return 'Very close — small adjustments only. Breathe and settle into it.';
+  var d = cur[key] - target[key];
+  switch (key) {
+    case 'lKnee': return d > 0 ? 'Bend your left knee more' : 'Straighten your left leg a little';
+    case 'rKnee': return d > 0 ? 'Bend your right knee more' : 'Straighten your right leg a little';
+    case 'lElbow': return d < 0 ? 'Straighten your left arm' : 'Soften your left elbow — bend it a little';
+    case 'rElbow': return d < 0 ? 'Straighten your right arm' : 'Soften your right elbow — bend it a little';
+    case 'lShoulder': return d < 0 ? 'Raise your left arm higher' : 'Lower your left arm a little';
+    case 'rShoulder': return d < 0 ? 'Raise your right arm higher' : 'Lower your right arm a little';
+    default: return d > 0 ? 'Sit your hips back and down a little' : 'Straighten up through your hips';
+  }
+}
+
+/* ================= session ================= */
+function startSessionClock() { if (!sessionStart) sessionStart = Date.now(); }
+setInterval(function () {
+  if (sessionStart) {
+    var s = Math.floor((Date.now() - sessionStart) / 1000);
+    $('sessTime').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+}, 500);
+function renderSession() {
+  var attempts = 0, done = 0, bestOverall = 0, worked = 0;
+  Object.keys(stats).forEach(function (id) {
+    attempts += stats[id].attempts;
+    if (stats[id].done) done++;
+    if (stats[id].attempts > 0) worked++;
+    bestOverall = Math.max(bestOverall, stats[id].best);
+  });
+  $('sessAttempts').textContent = String(attempts);
+  $('sessDone').textContent = String(done);
+  var cur = statFor(selectedPoseId);
+  $('sessBest').textContent = cur.best > 0 ? cur.best + '%' : '–';
+  $('sessSummary').textContent = attempts === 0
+    ? 'No practice yet. Your summary will appear here as you work through the poses.'
+    : 'You have worked on ' + worked + ' of ' + allPoses().length + ' reference poses · ' + done +
+      ' held at 85%+ for a full 2 seconds · best match so far ' + bestOverall + '% (selected pose best: ' + cur.best + '%).';
+}
+
+/* ================= practice loop ================= */
+function completePose() {
+  var st = statFor(selectedPoseId); st.done = true;
+  var flash = $('holdFlash');
+  flash.classList.add('show');
+  if (window.Motion && window.Motion.animate) { try { window.Motion.animate(flash, { scale: [0.97, 1] }, { duration: 0.45 }); } catch (e) {} }
+  setTimeout(function () { flash.classList.remove('show'); }, 1900);
+  setCorrection('Held it ✓ — “' + getPose(selectedPoseId).name + '” complete. Take the next pose when you’re ready.');
+  var nb = $('btnNextPose');
+  nb.classList.remove('hidden'); nb.classList.add('pulse-next');
+  if (allPoses().every(function (p) { return statFor(p.id).done; })) nb.classList.add('hidden');
+  buildPoseList(); renderSession();
+}
+function goNextPose() {
+  var poses = allPoses();
+  var idx = poses.findIndex(function (p) { return p.id === selectedPoseId; });
+  var next = null;
+  for (var i = 1; i <= poses.length; i++) {
+    var cand = poses[(idx + i) % poses.length];
+    if (!statFor(cand.id).done) { next = cand; break; }
+  }
+  if (!next) { setStatus('Every reference pose is held — full set complete. Lovely practice.', 'ok'); $('btnNextPose').classList.add('hidden'); return; }
+  selectPose(next.id);
+}
+function updatePractice(cur, fromPhoto) {
+  var pose = getPose(selectedPoseId);
+  var res = scoreAgainst(cur, pose.angles);
+  var st = statFor(selectedPoseId);
+  setScore(res.score);
+  updateReadout(cur);
+  if (res.score > st.best) st.best = res.score;
+
+  if (fromPhoto) {
+    if (photoCountedFor !== selectedPoseId) { st.attempts++; photoCountedFor = selectedPoseId; }
+    setHold(0, 'photo scored');
+    if (res.score >= 85) {
+      if (!st.done) { st.done = true; }
+      setCorrection('This photo matches “' + pose.name + '” at ' + res.score + '% — lovely form.');
+      $('btnNextPose').classList.remove('hidden');
+    } else {
+      setCorrection(correctionFor(cur, pose.angles, res.devs, res.score) + ' — that’s the biggest difference in this photo.');
+    }
+    buildPoseList(); renderSession();
+    return;
+  }
+
+  /* live mode */
+  if (prevScore < 50 && res.score >= 50) st.attempts++;
+  prevScore = res.score;
+  setCorrection(correctionFor(cur, pose.angles, res.devs, res.score));
+  if (res.score >= 85) {
+    if (!holdStart) holdStart = performance.now();
+    var held = (performance.now() - holdStart) / 1000;
+    setHold(clamp(held / 2, 0, 1), held.toFixed(1) + 's / 2s');
+    if (held >= 2 && !celebrated) { celebrated = true; completePose(); }
+  } else {
+    if (res.score < 70) celebrated = false;
+    holdStart = null;
+    setHold(0, '0.0s / 2s');
+  }
+  if (++frameN % 45 === 0) buildPoseList();
+  renderSession();
+}
+/* ================= pose engine ================= */
+function initEngine() {
+  if (typeof Pose === 'undefined') {
+    setStatus('The pose-estimation library could not be loaded — it is served from a CDN, so this needs an internet connection. The page itself is fine, but camera and photo analysis are paused until it loads. Please reconnect and reload.', 'error');
+    return false;
+  }
+  try {
+    poseEngine = new Pose({ locateFile: function (f) { return 'https://cdn.jsdelivr.net/npm/@mediapipe/pose/' + f; } });
+    poseEngine.setOptions({ modelComplexity: 1, smoothLandmarks: true, enableSegmentation: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    poseEngine.onResults(onResults);
+    engineReady = true;
+    return true;
+  } catch (e) {
+    setStatus('The pose engine failed to start (' + e.message + '). Photo and camera analysis are unavailable right now.', 'error');
+    return false;
+  }
+}
+function drawSkeleton(ctx, landmarks, w) {
+  if (typeof drawConnectors === 'function' && typeof POSE_CONNECTIONS !== 'undefined') {
+    drawConnectors(ctx, landmarks, POSE_CONNECTIONS, { color: 'rgba(53,208,186,0.9)', lineWidth: Math.max(2, w / 380) });
+  }
+  if (typeof drawLandmarks === 'function') {
+    drawLandmarks(ctx, landmarks, { color: '#E3B34C', fillColor: '#0B0A08', lineWidth: 1, radius: Math.max(3, w / 320) });
+  }
+}
+function onResults(results) {
+  var canvas = sourceMode === 'photo' ? $('photoCanvas') : $('liveCanvas');
+  var ctx = canvas.getContext('2d');
+  ctx.save();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (sourceMode !== 'photo') { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); } // mirror for selfie view
+  if (results && results.image) ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+  if (results && results.poseLandmarks) drawSkeleton(ctx, results.poseLandmarks, canvas.width);
+  ctx.restore();
+
+  var chip = $('detectChip');
+  if (results && results.poseLandmarks) {
+    chip.classList.add('hidden');
+    var cur = smoothPush(computeAngles(results.poseLandmarks));
+    lastAngles = cur;
+    if ($('teacherToggle').checked) $('btnCapture').disabled = false;
+    updatePractice(cur, sourceMode === 'photo');
+  } else {
+    chip.classList.remove('hidden');
+    if (sourceMode === 'photo') {
+      setScore(null);
+      setCorrection('No body found in that photo — a full-body shot with the whole figure visible works best.');
+    } else {
+      throttledHint('No body in frame — step back so your whole body is visible.');
+    }
+  }
+}
+var hintAt = 0;
+function throttledHint(t) { var now = Date.now(); if (now - hintAt > 3000) { hintAt = now; setCorrection(t); } }
+
+/* ================= camera ================= */
+async function startCamera() {
+  if (!engineReady && !initEngine()) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    setStatus('This browser does not offer camera access. You can still practice with “Upload a photo instead”.', 'error');
+    return;
+  }
+  try {
+    var probe = await navigator.mediaDevices.getUserMedia({ video: true });
+    probe.getTracks().forEach(function (t) { t.stop(); });
+  } catch (e) {
+    setStatus('Camera is unavailable or permission was denied — no problem at all: you can still practice with “Upload a photo instead”.', 'error');
+    return;
+  }
+  setStatus('');
+  var video = $('inputVideo');
+  stopPhotoStage();
+  sourceMode = 'live';
+  $('stageHint').classList.add('hidden');
+  $('modeChip').textContent = 'Live · on-device';
+  cameraOn = true;
+  var sendFrame = async function () {
+    if (!cameraOn) return;
+    try { await poseEngine.send({ image: video }); } catch (e) {}
+    rafId = requestAnimationFrame(sendFrame);
+  };
+  if (typeof Camera !== 'undefined') {
+    try {
+      cameraObj = new Camera(video, {
+        onFrame: async function () { try { await poseEngine.send({ image: video }); } catch (e) {} },
+        width: 1280, height: 720
+      });
+      await cameraObj.start();
+    } catch (e) {
+      cameraObj = null;
+      rafId = requestAnimationFrame(sendFrame); // fallback loop (stream already opened by Camera util attempt or next call)
+      if (!video.srcObject) {
+        try { video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } }); await video.play(); }
+        catch (e2) { cameraOn = false; setStatus('The camera could not be started. Photo mode still works.', 'error'); return; }
+      }
+    }
+  } else {
+    try {
+      video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
+      await video.play();
+      rafId = requestAnimationFrame(sendFrame);
+    } catch (e) {
+      cameraOn = false;
+      setStatus('The camera could not be started. Photo mode still works.', 'error');
+      return;
+    }
+  }
+  $('btnStartCam').classList.add('hidden');
+  $('btnStopCam').classList.remove('hidden');
+  startSessionClock();
+  setCorrection('Camera on. Step back so your whole body is visible, then shape yourself into “' + getPose(selectedPoseId).name + '”.');
+}
+function stopCamera() {
+  cameraOn = false;
+  if (rafId) cancelAnimationFrame(rafId);
+  if (cameraObj && cameraObj.stop) { try { cameraObj.stop(); } catch (e) {} cameraObj = null; }
+  var video = $('inputVideo');
+  if (video.srcObject) { video.srcObject.getTracks().forEach(function (t) { t.stop(); }); video.srcObject = null; }
+  var c = $('liveCanvas'); c.getContext('2d').clearRect(0, 0, c.width, c.height);
+  if (sourceMode === 'live') sourceMode = 'idle';
+  holdStart = null; setHold(0, '0.0s / 2s');
+  $('btnStartCam').classList.remove('hidden');
+  $('btnStopCam').classList.add('hidden');
+  $('modeChip').textContent = 'Camera off';
+  if (sourceMode === 'idle') $('stageHint').classList.remove('hidden');
+}
+
+/* ================= photo mode ================= */
+function stopPhotoStage() {
+  $('photoWrap').classList.add('hidden');
+  $('photoWrap').classList.remove('flex');
+  $('btnBackCam').classList.add('hidden');
+}
+function onPhotoChosen(ev) {
+  var file = ev.target.files && ev.target.files[0];
+  if (!file) return;
+  if (!engineReady && !initEngine()) return;
+  var url = URL.createObjectURL(file);
+  var img = new Image();
+  img.onload = async function () {
+    if (cameraOn) stopCamera();
+    sourceMode = 'photo';
+    var canvas = $('photoCanvas');
+    var scale = Math.min(1, 1100 / img.naturalWidth);
+    canvas.width = Math.max(2, Math.round(img.naturalWidth * scale));
+    canvas.height = Math.max(2, Math.round(img.naturalHeight * scale));
+    $('photoWrap').classList.remove('hidden');
+    $('photoWrap').classList.add('flex');
+    $('stageHint').classList.add('hidden');
+    $('btnBackCam').classList.remove('hidden');
+    $('modeChip').textContent = 'Photo · on-device';
+    photoCountedFor = '__none__';
+    smoothBuf = [];
+    setCorrection('Analyzing your photo…');
+    try { await poseEngine.send({ image: img }); startSessionClock(); }
+    catch (e) { setStatus('That photo could not be analyzed. Try a different, full-body image.', 'error'); }
+  };
+  img.onerror = function () { setStatus('That file could not be read as an image. Please choose a JPG or PNG photo.', 'error'); };
+  img.src = url;
+}
+
+/* ================= teacher capture ================= */
+function captureReference() {
+  if (!lastAngles) {
+    setStatus('Hold a pose in front of the camera first — I need a live reading to capture a reference.', 'error');
+    return;
+  }
+  var fallback = 'Teacher reference ' + (customPoses.length + 1);
+  var name = ($('poseNameInput').value || '').trim() || fallback;
+  var angles = {};
+  ANGLE_KEYS.forEach(function (k) { angles[k] = Math.round(lastAngles[k]); });
+  var pose = { id: 'custom-' + Date.now(), builtin: false, name: name, sub: 'Captured ' + new Date().toLocaleDateString(), angles: angles };
+  customPoses.push(pose);
+  saveCustomPoses();
+  $('poseNameInput').value = '';
+  selectPose(pose.id);
+  setStatus('Saved “' + name + '” as a reference pose — it is now in the practice list, and students can practice against it right away.', 'ok');
+  if (window.Motion && window.Motion.animate) { try { window.Motion.animate('#poseList', { scale: [0.985, 1] }, { duration: 0.35 }); } catch (e) {} }
+}
+
+/* ================= wiring & boot ================= */
+$('btnStartCam').addEventListener('click', startCamera);
+$('btnStopCam').addEventListener('click', stopCamera);
+$('btnNextPose').addEventListener('click', goNextPose);
+$('photoInput').addEventListener('change', onPhotoChosen);
+$('btnBackCam').addEventListener('click', function () {
+  stopPhotoStage();
+  sourceMode = 'idle';
+  $('modeChip').textContent = 'Camera off';
+  $('stageHint').classList.remove('hidden');
+  setScore(null);
+  setCorrection('Back to the studio floor. Start the camera when you’re ready.');
+});
+$('teacherToggle').addEventListener('change', function (e) {
+  $('teacherPanel').classList.toggle('hidden', !e.target.checked);
+  $('btnCapture').disabled = !lastAngles;
+  if (e.target.checked) setCorrection('Teacher mode: start the camera, hold the reference pose steady, then capture it. That becomes the destination students practice toward.');
+});
+$('btnCapture').addEventListener('click', captureReference);
+$('btnResetSession').addEventListener('click', function () {
+  stats = {}; sessionStart = null; $('sessTime').textContent = '0:00';
+  holdStart = null; celebrated = false; prevScore = 0;
+  $('btnNextPose').classList.add('hidden');
+  buildPoseList(); renderSession(); setScore(null);
+  setCorrection('Fresh session. Pick a pose and begin.');
+});
+
+buildAngleGrid();
+buildPoseList();
+renderTargets();
+renderSession();
+if (typeof Pose === 'undefined') {
+  setStatus('Heads-up: the MediaPipe pose library did not load, so camera and photo analysis are paused. Check your connection and reload the page.', 'error');
+}
+if (window.Motion && window.Motion.animate) {
+  try { window.Motion.animate('header', { opacity: [0, 1], y: [-10, 0] }, { duration: 0.6 }); } catch (e) {}
+}
+})();
+</script>
+</body>
+</html>
